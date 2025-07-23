@@ -19,8 +19,9 @@ df = spark.read.csv(input_path, header=True, inferSchema=True)
 
 # Sample Transformation
 filtered_df = df.filter(df["amount"] > 1000)
-
-# Sample: Write to S3
+# Sample: Add a new column
+filtered_df = filtered_df.withColumn(
+    "high_value", filtered_df["amount"] > 5000)  # Sample: Write to S3
 output_path = "s3://aws-s3-etl-demo/data/output/"
 filtered_df.write.mode("overwrite").csv(output_path)
 
