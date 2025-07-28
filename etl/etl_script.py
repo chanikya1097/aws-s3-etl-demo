@@ -1,11 +1,11 @@
 import sys
-from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
-from pyspark.context import SparkContext
 from awsglue.context import GlueContext
+from pyspark.context import SparkContext
 from awsglue.job import Job
+from pyspark.sql.functions import col, trim
 
-# Set up Glue context
+# Glue boilerplate
 args = getResolvedOptions(sys.argv, ['JOB_NAME'])
 sc = SparkContext()
 glueContext = GlueContext(sc)
@@ -13,17 +13,29 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-# Sample: Read from S3
-input_path = "s3://aws-s3-etl-demo/data/input/"
-df = spark.read.csv(input_path, header=True, inferSchema=True)
+# Common S3 paths
+input_base = "s3://aws-s3-etl-demo1/data/"
+output_base = "s3://aws-s3-etl-demo1/cleaned/"
 
-# Sample Transformation
-filtered_df = df.filter(df["amount"] > 1000)
-# Sample: Add a new column
-filtered_df = filtered_df.withColumn(
-    "high_value", filtered_df["amount"] > 5000)  # Sample: Write to S3
-output_path = "s3://aws-s3-etl-demo/data/output/"
-filtered_df.write.mode("overwrite").csv(output_path)
+# Helper to clean and write CSV
+def clean_and_write(file_name):
+    print(f"Processing {file_name}...")
+    df = spark.read.option("header", True).csv(f"{input_base}{file_name}")
 
-# Commit Glue job
+    # Remove rows with nulls in all columns
+    df = df.dropna(how="all")
+
+    # Trim whitespace from all string columns
+    for column in df.columns:
+        df = df.withColumn(column, trim(col(column)))
+
+    # Write cleaned data
+    df.write.mode("overwrite").csv(f"{output_base}{file_name.replace('.csv', '')}/", header=True)
+
+# List of files to clean
+csv_files = ["account.csv", "customer.csv", "financial_data_updated.csv", "transaction.csv"]
+
+for file in csv_files:
+    clean_and_write(file)
+
 job.commit()
